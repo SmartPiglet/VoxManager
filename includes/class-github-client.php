@@ -1,4 +1,12 @@
 <?php
+/**
+ * GitHub Client for VoxManager
+ *
+ * Handles communication with GitHub API for repository information,
+ * releases, and authentication.
+ *
+ * @package VoxManager
+ */
 
 namespace Voxel\VoxManager;
 
@@ -6,16 +14,40 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+/**
+ * GitHub API client class.
+ *
+ * Provides methods to fetch repository info, releases, branches,
+ * and handles authentication for private repositories.
+ */
 final class Github_Client {
+
+	/**
+	 * Settings instance for retrieving configuration.
+	 *
+	 * @var Settings
+	 */
 	private Settings $settings;
 
+	/**
+	 * Constructor.
+	 *
+	 * @param Settings $settings Settings instance.
+	 */
 	public function __construct( Settings $settings ) {
 		$this->settings = $settings;
 	}
 
+	/**
+	 * Filter HTTP request arguments to add GitHub authentication headers.
+	 *
+	 * @param array  $args HTTP request arguments.
+	 * @param string $url  Request URL.
+	 * @return array Modified arguments.
+	 */
 	public function filter_http_request_args( array $args, string $url ): array {
 		$token = $this->settings->get_github_token();
-		if ( $token === '' ) {
+		if ( '' === $token ) {
 			return $args;
 		}
 
@@ -25,15 +57,77 @@ final class Github_Client {
 		}
 
 		$host = strtolower( $host );
-		if ( $host !== 'api.github.com' && $host !== 'github.com' && $host !== 'objects.githubusercontent.com' && $host !== 'codeload.github.com' ) {
+		if ( 'api.github.com' !== $host && 'github.com' !== $host && 'objects.githubusercontent.com' !== $host && 'codeload.github.com' !== $host ) {
 			return $args;
 		}
 
-		$headers = isset( $args['headers'] ) && is_array( $args['headers'] ) ? $args['headers'] : array();
-		$headers = $this->apply_github_auth_headers( $headers );
+		$headers         = isset( $args['headers'] ) && is_array( $args['headers'] ) ? $args['headers'] : array();
+		$headers         = $this->apply_github_auth_headers( $headers );
 		$args['headers'] = $headers;
 
 		return $args;
+	}
+
+	/**
+	 * Get current GitHub API rate limit status.
+	 *
+	 * @return array{remaining: int, limit: int, reset: int}|null Rate limit info or null on error.
+	 */
+	public function get_rate_limit(): ?array {
+		$cache_key = 'voxmanager_github_rate_limit';
+		$cached    = get_site_transient( $cache_key );
+		if ( is_array( $cached ) ) {
+			return $cached;
+		}
+
+		$response = wp_remote_get(
+			'https://api.github.com/rate_limit',
+			array(
+				'timeout' => 10,
+				'headers' => $this->apply_github_auth_headers( array() ),
+			)
+		);
+
+		if ( is_wp_error( $response ) ) {
+			return null;
+		}
+
+		$status_code = wp_remote_retrieve_response_code( $response );
+		if ( $status_code < 200 || $status_code >= 300 ) {
+			return null;
+		}
+
+		$data = json_decode( wp_remote_retrieve_body( $response ), true );
+		if ( ! is_array( $data ) || ! isset( $data['resources']['core'] ) ) {
+			return null;
+		}
+
+		$core = $data['resources']['core'];
+		$info = array(
+			'remaining' => isset( $core['remaining'] ) ? (int) $core['remaining'] : 0,
+			'limit'     => isset( $core['limit'] ) ? (int) $core['limit'] : 0,
+			'reset'     => isset( $core['reset'] ) ? (int) $core['reset'] : 0,
+		);
+
+		// Cache for 1 minute.
+		set_site_transient( $cache_key, $info, MINUTE_IN_SECONDS );
+
+		return $info;
+	}
+
+	/**
+	 * Check if we're near the rate limit.
+	 *
+	 * @param int $threshold Minimum remaining requests before warning.
+	 * @return bool True if rate limit is low.
+	 */
+	public function is_rate_limit_low( int $threshold = 10 ): bool {
+		$rate_limit = $this->get_rate_limit();
+		if ( ! is_array( $rate_limit ) ) {
+			return false;
+		}
+
+		return $rate_limit['remaining'] <= $threshold;
 	}
 
 	public function get_repo_info( string $repo ) {
@@ -466,11 +560,11 @@ final class Github_Client {
 
 	private function normalize_version( string $raw ): string {
 		$raw = trim( $raw );
-		if ( $raw === '' ) {
+		if ( '' === $raw ) {
 			return '';
 		}
 
-		$raw = ltrim( $raw, "vV" );
+		$raw = ltrim( $raw, 'vV' );
 		if ( preg_match( '/(\d+\.[\d.]+)/', $raw, $matches ) ) {
 			return $matches[1];
 		}

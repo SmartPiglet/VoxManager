@@ -3,7 +3,7 @@
  * Plugin Name: VoxManager
  * Plugin URI: https://voxeladdons.co.uk/voxmanager
  * Description: Manage VoxPro suite plugin status and update checks. (Personal use)
- * Version: 0.1.1
+ * Version: 0.2.0
  * Author: VoxelAddons
  * Author URI: https://voxeladdons.co.uk
  * License: GPL v2 or later
@@ -11,12 +11,87 @@
  * Text Domain: voxmanager
  * Requires at least: 5.8
  * Requires PHP: 7.4
+ *
+ * @package VoxManager
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-require_once __DIR__ . '/includes/class-plugin.php';
+// Plugin constants.
+define( 'VOXMANAGER_VERSION', '0.2.0' );
+define( 'VOXMANAGER_PLUGIN_FILE', __FILE__ );
+define( 'VOXMANAGER_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
+
+// Load text domain.
+add_action(
+	'init',
+	function () {
+		load_plugin_textdomain( 'voxmanager', false, dirname( plugin_basename( VOXMANAGER_PLUGIN_FILE ) ) . '/languages' );
+	}
+);
+
+// Activation hook - initialize defaults.
+register_activation_hook(
+	__FILE__,
+	function () {
+		// Set default options if not already set.
+		if ( false === get_option( 'voxmanager_settings' ) ) {
+			add_option(
+				'voxmanager_settings',
+				array(
+					'github_token'   => '',
+					'release_source' => 'releases',
+					'package_source' => 'asset',
+					'plugins'        => array(),
+				),
+				'',
+				false
+			);
+		}
+	}
+);
+
+// Deactivation hook - cleanup transients.
+register_deactivation_hook(
+	__FILE__,
+	function () {
+		// Clear cached release/repo data for all suite plugins.
+		$settings = get_option( 'voxmanager_settings', array() );
+		$plugins  = isset( $settings['plugins'] ) && is_array( $settings['plugins'] ) ? $settings['plugins'] : array();
+
+		// Default plugins to clear.
+		$default_repos = array(
+			'SmartPiglet/VoxManager',
+			'SmartPiglet/VoxPro',
+			'SmartPiglet/VoxPoints',
+			'SmartPiglet/VoxPay',
+			'SmartPiglet/VoxLab',
+			'SmartPiglet/VoxPulse',
+		);
+
+		// Collect all repos from settings.
+		foreach ( $plugins as $config ) {
+			if ( isset( $config['repo'] ) && is_string( $config['repo'] ) && '' !== $config['repo'] ) {
+				$default_repos[] = $config['repo'];
+			}
+		}
+
+		$default_repos = array_unique( $default_repos );
+
+		// Delete transients for each repo.
+		foreach ( $default_repos as $repo ) {
+			$hash = md5( $repo );
+			delete_site_transient( 'voxmanager_release_' . md5( $repo . '|releases' ) );
+			delete_site_transient( 'voxmanager_release_' . md5( $repo . '|tags' ) );
+			delete_site_transient( 'voxmanager_release_error_' . $hash );
+			delete_site_transient( 'voxmanager_repo_info_' . $hash );
+			delete_site_transient( 'voxmanager_repo_branches_' . $hash );
+		}
+	}
+);
+
+require_once VOXMANAGER_PLUGIN_DIR . 'includes/class-plugin.php';
 
 Voxel\VoxManager\Plugin::instance();

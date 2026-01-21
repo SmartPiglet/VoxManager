@@ -34,6 +34,15 @@ final class Admin_Page {
 		);
 	}
 
+	public function filter_admin_body_class( string $classes ): string {
+		$page = isset( $_GET['page'] ) ? (string) $_GET['page'] : '';
+		if ( $page === 'voxmanager' ) {
+			$classes .= ' vx-dark-mode ';
+		}
+
+		return $classes;
+	}
+
 	public function render_page(): void {
 		if ( ! current_user_can( $this->settings->get_required_capability() ) ) {
 			wp_die( esc_html__( 'You do not have permission to access this page.', 'voxmanager' ) );

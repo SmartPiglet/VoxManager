@@ -1,4 +1,11 @@
 <?php
+/**
+ * Plugin Installer for VoxManager
+ *
+ * Handles installation of VoxPro suite plugins from GitHub.
+ *
+ * @package VoxManager
+ */
 
 namespace Voxel\VoxManager;
 
@@ -6,27 +13,58 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+/**
+ * Plugin installer class.
+ *
+ * Manages the installation of plugins from GitHub repositories
+ * using WordPress Plugin Upgrader.
+ */
 final class Installer {
+
+	/**
+	 * Settings instance.
+	 *
+	 * @var Settings
+	 */
 	private Settings $settings;
+
+	/**
+	 * GitHub client instance.
+	 *
+	 * @var Github_Client
+	 */
 	private Github_Client $github;
 
 	/**
+	 * Current installation context for source selection filter.
+	 *
 	 * @var array|null
 	 */
 	private $install_context = null;
 
+	/**
+	 * Constructor.
+	 *
+	 * @param Settings      $settings Settings instance.
+	 * @param Github_Client $github   GitHub client instance.
+	 */
 	public function __construct( Settings $settings, Github_Client $github ) {
 		$this->settings = $settings;
-		$this->github = $github;
+		$this->github   = $github;
 	}
 
+	/**
+	 * Handle plugin installation request.
+	 *
+	 * @return void
+	 */
 	public function handle_install_plugin(): void {
 		if ( ! current_user_can( $this->settings->get_install_capability() ) ) {
 			wp_die( esc_html__( 'You do not have permission to install plugins.', 'voxmanager' ) );
 		}
 
 		$plugin_file = isset( $_GET['plugin'] ) ? sanitize_text_field( wp_unslash( $_GET['plugin'] ) ) : '';
-		if ( $plugin_file === '' ) {
+		if ( '' === $plugin_file ) {
 			wp_die( esc_html__( 'Missing plugin identifier.', 'voxmanager' ) );
 		}
 
@@ -104,6 +142,8 @@ final class Installer {
 			return $target;
 		}
 
+		// Fallback: Direct rename when WP_Filesystem fails (e.g., on some local environments).
+		// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- Fallback with graceful failure.
 		if ( @rename( $source, $target ) ) {
 			return $target;
 		}

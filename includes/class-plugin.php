@@ -41,6 +41,7 @@ final class Plugin {
 	private function register_hooks(): void {
 		add_action( 'admin_menu', array( $this->admin, 'register_menu' ) );
 		add_action( 'admin_enqueue_scripts', array( $this->admin, 'enqueue_admin_assets' ) );
+		add_filter( 'admin_body_class', array( $this->admin, 'filter_admin_body_class' ) );
 		add_action( 'admin_post_voxmanager_check_updates', array( $this->admin, 'handle_check_updates' ) );
 		add_action( 'admin_post_voxmanager_save_settings', array( $this->admin, 'handle_save_settings' ) );
 		add_action( 'admin_post_voxmanager_sync_github', array( $this->admin, 'handle_sync_github' ) );
