@@ -151,15 +151,14 @@ if ( ! defined( 'ABSPATH' ) ) {
 			<tr>
 				<th scope="row"><label for="voxmanager_github_token"><?php echo esc_html__( 'GitHub token', 'voxmanager' ); ?></label></th>
 				<td>
+					<?php
+					$token_value = isset( $settings['github_token'] ) ? (string) $settings['github_token'] : '';
+					$token_placeholder = $token_value !== '' ? '********' : '';
+					?>
+					<input type="password" class="regular-text" id="voxmanager_github_token" name="voxmanager_github_token" value="" placeholder="<?php echo esc_attr( $token_placeholder ); ?>" />
+					<p class="description"><?php echo esc_html__( 'Used to access private GitHub repos. Leave blank to keep the existing token.', 'voxmanager' ); ?></p>
 					<?php if ( $token_defined ) : ?>
-						<p><?php echo esc_html__( 'Token loaded from VOXMANAGER_GITHUB_TOKEN in wp-config.php.', 'voxmanager' ); ?></p>
-					<?php else : ?>
-						<?php
-						$token_value = isset( $settings['github_token'] ) ? (string) $settings['github_token'] : '';
-						$token_placeholder = $token_value !== '' ? '********' : '';
-						?>
-						<input type="password" class="regular-text" id="voxmanager_github_token" name="voxmanager_github_token" value="" placeholder="<?php echo esc_attr( $token_placeholder ); ?>" />
-						<p class="description"><?php echo esc_html__( 'Used to access private GitHub repos. Leave blank to keep the existing token.', 'voxmanager' ); ?></p>
+						<p class="description"><?php echo esc_html__( 'VOXMANAGER_GITHUB_TOKEN is set in wp-config.php. Saved tokens will be used when the field is not empty.', 'voxmanager' ); ?></p>
 					<?php endif; ?>
 				</td>
 			</tr>

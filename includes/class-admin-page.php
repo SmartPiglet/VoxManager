@@ -100,13 +100,9 @@ final class Admin_Page {
 		check_admin_referer( 'voxmanager_save_settings' );
 
 		$settings = $this->settings->get_settings();
-		$token_defined = defined( 'VOXMANAGER_GITHUB_TOKEN' ) && VOXMANAGER_GITHUB_TOKEN;
-
-		if ( ! $token_defined ) {
-			$raw_token = isset( $_POST['voxmanager_github_token'] ) ? (string) wp_unslash( $_POST['voxmanager_github_token'] ) : '';
-			if ( $raw_token !== '' ) {
-				$settings['github_token'] = sanitize_text_field( $raw_token );
-			}
+		$raw_token = isset( $_POST['voxmanager_github_token'] ) ? (string) wp_unslash( $_POST['voxmanager_github_token'] ) : '';
+		if ( $raw_token !== '' ) {
+			$settings['github_token'] = sanitize_text_field( $raw_token );
 		}
 
 		$release_source = isset( $_POST['voxmanager_release_source'] ) ? (string) wp_unslash( $_POST['voxmanager_release_source'] ) : 'releases';

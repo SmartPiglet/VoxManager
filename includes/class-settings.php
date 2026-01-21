@@ -157,11 +157,16 @@ final class Settings {
 	}
 
 	public function get_github_token(): string {
+		$settings = $this->get_settings();
+		$token = isset( $settings['github_token'] ) ? (string) $settings['github_token'] : '';
+		if ( $token !== '' ) {
+			return $token;
+		}
+
 		if ( defined( 'VOXMANAGER_GITHUB_TOKEN' ) && VOXMANAGER_GITHUB_TOKEN ) {
 			return (string) VOXMANAGER_GITHUB_TOKEN;
 		}
 
-		$settings = $this->get_settings();
-		return isset( $settings['github_token'] ) ? (string) $settings['github_token'] : '';
+		return '';
 	}
 }
