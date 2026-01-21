@@ -3,7 +3,7 @@
  * Plugin Name: VoxManager
  * Plugin URI: https://voxeladdons.co.uk/voxmanager
  * Description: Manage VoxPro suite plugin status and update checks. (Personal use)
- * Version: 0.1.0
+ * Version: 0.1.1
  * Author: VoxelAddons
  * Author URI: https://voxeladdons.co.uk
  * License: GPL v2 or later
