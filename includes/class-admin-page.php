@@ -58,6 +58,16 @@ final class Admin_Page {
 		$updates       = get_site_transient( 'update_plugins' );
 		$last_checked  = $this->updater->format_last_checked( $updates );
 		$token_defined = defined( 'VOXMANAGER_GITHUB_TOKEN' ) && VOXMANAGER_GITHUB_TOKEN;
+		$api_key_defined = defined( 'VOXMANAGER_API_KEY' ) && VOXMANAGER_API_KEY;
+		$has_github_token = $this->settings->has_github_token();
+		$has_api_key = $this->settings->has_api_key();
+
+		if ( ! $has_api_key ) {
+			$generated_api_key = $this->generate_api_key();
+			$this->settings->set_api_key( $generated_api_key );
+			$this->set_generated_api_key_notice( $generated_api_key );
+			$has_api_key = true;
+		}
 
 		$checked_notice = isset( $_GET['voxmanager_checked'] );
 		$saved_notice   = isset( $_GET['voxmanager_saved'] );
@@ -65,6 +75,10 @@ final class Admin_Page {
 		$installed_notice = isset( $_GET['voxmanager_installed'] );
 		$install_error = isset( $_GET['voxmanager_install_error'] );
 		$install_error_message = $install_error ? $this->installer->get_install_error_message() : '';
+		$generated_api_key = $this->get_generated_api_key_notice();
+		if ( $generated_api_key !== '' ) {
+			$notices[] = __( 'API key generated. Copy it now; it will only be shown once.', 'voxmanager' );
+		}
 
 		$view = trailingslashit( dirname( __DIR__ ) ) . 'templates/admin-page.php';
 		if ( is_readable( $view ) ) {
@@ -111,7 +125,17 @@ final class Admin_Page {
 		$settings = $this->settings->get_settings();
 		$raw_token = isset( $_POST['voxmanager_github_token'] ) ? (string) wp_unslash( $_POST['voxmanager_github_token'] ) : '';
 		if ( $raw_token !== '' ) {
-			$settings['github_token'] = sanitize_text_field( $raw_token );
+			$this->settings->set_github_token( $raw_token );
+		}
+
+		$generate_api_key = isset( $_POST['voxmanager_generate_api_key'] );
+		$raw_api_key = isset( $_POST['voxmanager_api_key'] ) ? (string) wp_unslash( $_POST['voxmanager_api_key'] ) : '';
+		if ( $generate_api_key ) {
+			$generated_api_key = $this->generate_api_key();
+			$this->settings->set_api_key( $generated_api_key );
+			$this->set_generated_api_key_notice( $generated_api_key );
+		} elseif ( $raw_api_key !== '' ) {
+			$this->settings->set_api_key( $raw_api_key );
 		}
 
 		$release_source = isset( $_POST['voxmanager_release_source'] ) ? (string) wp_unslash( $_POST['voxmanager_release_source'] ) : 'releases';
@@ -128,7 +152,12 @@ final class Admin_Page {
 		update_option( 'voxmanager_settings', $settings, false );
 		$this->github->clear_release_cache();
 
-		$redirect = add_query_arg( 'voxmanager_saved', '1', self_admin_url( 'admin.php?page=voxmanager' ) );
+		$redirect = add_query_arg(
+			array(
+				'voxmanager_saved' => '1',
+			),
+			self_admin_url( 'admin.php?page=voxmanager' )
+		);
 		wp_safe_redirect( $redirect );
 		exit;
 	}
@@ -183,5 +212,26 @@ final class Admin_Page {
 			array(),
 			(string) filemtime( $path )
 		);
+	}
+
+	private function generate_api_key(): string {
+		return wp_generate_password( 48, false, false );
+	}
+
+	private function set_generated_api_key_notice( string $api_key ): void {
+		$key = $this->get_generated_api_key_key();
+		set_site_transient( $key, $api_key, 5 * MINUTE_IN_SECONDS );
+	}
+
+	private function get_generated_api_key_notice(): string {
+		$key = $this->get_generated_api_key_key();
+		$api_key = get_site_transient( $key );
+		delete_site_transient( $key );
+
+		return is_string( $api_key ) ? $api_key : '';
+	}
+
+	private function get_generated_api_key_key(): string {
+		return 'voxmanager_generated_api_key_' . get_current_user_id();
 	}
 }

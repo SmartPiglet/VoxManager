@@ -41,10 +41,21 @@ register_activation_hook(
 			add_option(
 				'voxmanager_settings',
 				array(
-					'github_token'   => '',
 					'release_source' => 'releases',
 					'package_source' => 'asset',
 					'plugins'        => array(),
+				),
+				'',
+				false
+			);
+		}
+
+		if ( false === get_option( 'voxmanager_secrets' ) ) {
+			add_option(
+				'voxmanager_secrets',
+				array(
+					'github_token' => '',
+					'api_key'      => '',
 				),
 				'',
 				false

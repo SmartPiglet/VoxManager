@@ -54,6 +54,102 @@ final class Installer {
 	}
 
 	/**
+	 * Install a suite plugin programmatically.
+	 *
+	 * @param string $plugin_file Plugin file path.
+	 * @return bool|\WP_Error
+	 */
+	public function install_plugin( string $plugin_file ) {
+		$plugin_file = trim( $plugin_file );
+		if ( $plugin_file === '' ) {
+			return new \WP_Error( 'voxmanager_missing_plugin', __( 'Missing plugin identifier.', 'voxmanager' ), array( 'status' => 400 ) );
+		}
+
+		$suite_plugins = $this->settings->get_suite_plugins();
+		$config = $suite_plugins[ $plugin_file ] ?? null;
+		if ( ! is_array( $config ) || empty( $config['repo'] ) ) {
+			return new \WP_Error( 'voxmanager_invalid_plugin', __( 'Plugin configuration not found.', 'voxmanager' ), array( 'status' => 404 ) );
+		}
+
+		require_once ABSPATH . 'wp-admin/includes/file.php';
+		require_once ABSPATH . 'wp-admin/includes/plugin.php';
+		require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
+
+		WP_Filesystem();
+
+		$package_url = $this->get_install_package_url( $config, $plugin_file );
+		if ( $package_url === '' ) {
+			return new \WP_Error( 'voxmanager_package_missing', __( 'Unable to resolve a download package.', 'voxmanager' ), array( 'status' => 500 ) );
+		}
+
+		$this->install_context = array(
+			'plugin_file' => $plugin_file,
+			'plugin_dir'  => dirname( $plugin_file ),
+		);
+
+		$skin = new \Automatic_Upgrader_Skin();
+		$upgrader = new \Plugin_Upgrader( $skin );
+		$result = $upgrader->install( $package_url );
+
+		$this->install_context = null;
+
+		if ( is_wp_error( $result ) ) {
+			return $result;
+		}
+
+		if ( ! $result ) {
+			return new \WP_Error( 'voxmanager_install_failed', __( 'Plugin installation failed.', 'voxmanager' ), array( 'status' => 500 ) );
+		}
+
+		return true;
+	}
+
+	/**
+	 * Upgrade a suite plugin programmatically.
+	 *
+	 * @param string $plugin_file Plugin file path.
+	 * @return bool|\WP_Error
+	 */
+	public function upgrade_plugin( string $plugin_file ) {
+		$plugin_file = trim( $plugin_file );
+		if ( $plugin_file === '' ) {
+			return new \WP_Error( 'voxmanager_missing_plugin', __( 'Missing plugin identifier.', 'voxmanager' ), array( 'status' => 400 ) );
+		}
+
+		$suite_plugins = $this->settings->get_suite_plugins();
+		if ( ! isset( $suite_plugins[ $plugin_file ] ) ) {
+			return new \WP_Error( 'voxmanager_invalid_plugin', __( 'Plugin configuration not found.', 'voxmanager' ), array( 'status' => 404 ) );
+		}
+
+		require_once ABSPATH . 'wp-admin/includes/file.php';
+		require_once ABSPATH . 'wp-admin/includes/plugin.php';
+		require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
+
+		WP_Filesystem();
+
+		$this->install_context = array(
+			'plugin_file' => $plugin_file,
+			'plugin_dir'  => dirname( $plugin_file ),
+		);
+
+		$skin = new \Automatic_Upgrader_Skin();
+		$upgrader = new \Plugin_Upgrader( $skin );
+		$result = $upgrader->upgrade( $plugin_file );
+
+		$this->install_context = null;
+
+		if ( is_wp_error( $result ) ) {
+			return $result;
+		}
+
+		if ( ! $result ) {
+			return new \WP_Error( 'voxmanager_update_failed', __( 'Plugin update failed.', 'voxmanager' ), array( 'status' => 500 ) );
+		}
+
+		return true;
+	}
+
+	/**
 	 * Handle plugin installation request.
 	 *
 	 * @return void
@@ -121,11 +217,19 @@ final class Installer {
 	}
 
 	public function filter_upgrader_source_selection( $source, $remote_source, $upgrader, $hook_extra ) {
-		if ( empty( $this->install_context['plugin_dir'] ) || ! is_dir( $source ) ) {
+		$plugin_dir = $this->install_context['plugin_dir'] ?? '';
+		if ( $plugin_dir === '' && isset( $hook_extra['plugin'] ) && is_string( $hook_extra['plugin'] ) ) {
+			$suite_plugins = $this->settings->get_suite_plugins();
+			$plugin_file = $hook_extra['plugin'];
+			if ( isset( $suite_plugins[ $plugin_file ] ) ) {
+				$plugin_dir = dirname( $plugin_file );
+			}
+		}
+
+		if ( $plugin_dir === '' || ! is_dir( $source ) ) {
 			return $source;
 		}
 
-		$plugin_dir = $this->install_context['plugin_dir'];
 		$target = trailingslashit( $remote_source ) . $plugin_dir;
 
 		if ( basename( $source ) === $plugin_dir ) {

@@ -130,6 +130,48 @@ final class Github_Client {
 		return $rate_limit['remaining'] <= $threshold;
 	}
 
+	public function validate_token( string $token ) {
+		$token = trim( $token );
+		if ( $token === '' ) {
+			return new \WP_Error( 'voxmanager_missing_token', __( 'GitHub token is required.', 'voxmanager' ), array( 'status' => 400 ) );
+		}
+
+		$response = wp_remote_get(
+			'https://api.github.com/user',
+			array(
+				'timeout' => 10,
+				'headers' => $this->build_auth_headers( $token ),
+			)
+		);
+
+		if ( is_wp_error( $response ) ) {
+			return new \WP_Error(
+				'voxmanager_github_request_failed',
+				__( 'Unable to validate GitHub token.', 'voxmanager' ),
+				array(
+					'status' => 500,
+					'error'  => $response->get_error_message(),
+				)
+			);
+		}
+
+		$status_code = wp_remote_retrieve_response_code( $response );
+		if ( $status_code < 200 || $status_code >= 300 ) {
+			return new \WP_Error(
+				'voxmanager_invalid_token',
+				__( 'Invalid GitHub token provided.', 'voxmanager' ),
+				array(
+					'status' => 400,
+					'code'   => $status_code,
+				)
+			);
+		}
+
+		return array(
+			'valid' => true,
+		);
+	}
+
 	public function get_repo_info( string $repo ) {
 		$repo = $this->settings->sanitize_repo( $repo );
 		if ( $repo === '' ) {
@@ -409,12 +451,17 @@ final class Github_Client {
 			return $headers;
 		}
 
-		$auth_scheme = strpos( $token, 'github_pat_' ) === 0 ? 'Bearer' : 'token';
-		$headers['Authorization'] = $auth_scheme . ' ' . $token;
-		$headers['Accept'] = 'application/vnd.github+json';
-		$headers['User-Agent'] = 'VoxManager';
+		return array_merge( $headers, $this->build_auth_headers( $token ) );
+	}
 
-		return $headers;
+	private function build_auth_headers( string $token ): array {
+		$auth_scheme = strpos( $token, 'github_pat_' ) === 0 ? 'Bearer' : 'token';
+
+		return array(
+			'Authorization' => $auth_scheme . ' ' . $token,
+			'Accept'        => 'application/vnd.github+json',
+			'User-Agent'    => 'VoxManager',
+		);
 	}
 
 	private function resolve_release_asset_url( array $assets, string $plugin_dir, string $slug ): string {
@@ -550,7 +597,7 @@ final class Github_Client {
 		return 'voxmanager_repo_file_' . md5( $repo . '|' . $branch . '|' . $path );
 	}
 
-	private function parse_plugin_version( string $contents ): string {
+	public function parse_plugin_version( string $contents ): string {
 		if ( preg_match( '/^\s*Version:\s*(.+)$/mi', $contents, $matches ) ) {
 			return trim( $matches[1] );
 		}
@@ -558,7 +605,7 @@ final class Github_Client {
 		return '';
 	}
 
-	private function normalize_version( string $raw ): string {
+	public function normalize_version( string $raw ): string {
 		$raw = trim( $raw );
 		if ( '' === $raw ) {
 			return '';

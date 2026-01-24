@@ -7,10 +7,12 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 require_once __DIR__ . '/class-settings.php';
+require_once __DIR__ . '/class-encryptor.php';
 require_once __DIR__ . '/class-github-client.php';
 require_once __DIR__ . '/class-updater.php';
 require_once __DIR__ . '/class-installer.php';
 require_once __DIR__ . '/class-admin-page.php';
+require_once __DIR__ . '/class-rest-controller.php';
 
 final class Plugin {
 	private static ?self $instance = null;
@@ -19,6 +21,7 @@ final class Plugin {
 	private Updater $updater;
 	private Installer $installer;
 	private Admin_Page $admin;
+	private Rest_Controller $rest;
 
 	private function __construct() {
 		$this->settings = new Settings();
@@ -26,6 +29,7 @@ final class Plugin {
 		$this->updater = new Updater( $this->settings, $this->github );
 		$this->installer = new Installer( $this->settings, $this->github );
 		$this->admin = new Admin_Page( $this->settings, $this->github, $this->updater, $this->installer );
+		$this->rest = new Rest_Controller( $this->settings, $this->github, $this->installer );
 
 		$this->register_hooks();
 	}
@@ -39,6 +43,8 @@ final class Plugin {
 	}
 
 	private function register_hooks(): void {
+		add_action( 'admin_init', array( $this->settings, 'register_settings' ) );
+		add_action( 'rest_api_init', array( $this->settings, 'register_settings' ) );
 		add_action( 'admin_menu', array( $this->admin, 'register_menu' ) );
 		add_action( 'admin_enqueue_scripts', array( $this->admin, 'enqueue_admin_assets' ) );
 		add_filter( 'admin_body_class', array( $this->admin, 'filter_admin_body_class' ) );
@@ -51,5 +57,6 @@ final class Plugin {
 		add_filter( 'plugins_api', array( $this->updater, 'filter_plugins_api' ), 10, 3 );
 		add_filter( 'http_request_args', array( $this->github, 'filter_http_request_args' ), 10, 2 );
 		add_filter( 'upgrader_source_selection', array( $this->installer, 'filter_upgrader_source_selection' ), 10, 4 );
+		add_action( 'rest_api_init', array( $this->rest, 'register_routes' ) );
 	}
 }

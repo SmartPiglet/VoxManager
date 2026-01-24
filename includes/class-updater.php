@@ -89,7 +89,7 @@ final class Updater {
 				continue;
 			}
 
-			$remote_version = $this->normalize_version( (string) ( $release['tag_name'] ?? '' ) );
+			$remote_version = $this->github->normalize_version( (string) ( $release['tag_name'] ?? '' ) );
 			if ( $remote_version === '' ) {
 				continue;
 			}
@@ -247,17 +247,4 @@ final class Updater {
 		return date_i18n( trim( $date_format . ' ' . $time_format ), $timestamp );
 	}
 
-	private function normalize_version( string $raw ): string {
-		$raw = trim( $raw );
-		if ( $raw === '' ) {
-			return '';
-		}
-
-		$raw = ltrim( $raw, 'vV' );
-		if ( preg_match( '/(\d+\.[\d.]+)/', $raw, $matches ) ) {
-			return $matches[1];
-		}
-
-		return $raw;
-	}
 }
