@@ -55,12 +55,14 @@ final class Admin_Page {
 		$settings      = $this->settings->get_settings();
 		$suite_plugins = $this->settings->get_suite_plugins();
 		$installed     = get_plugins();
+		$installed_map = $this->settings->get_installed_plugin_map( $installed );
 		$updates       = get_site_transient( 'update_plugins' );
 		$last_checked  = $this->updater->format_last_checked( $updates );
 		$token_defined = defined( 'VOXMANAGER_GITHUB_TOKEN' ) && VOXMANAGER_GITHUB_TOKEN;
 		$api_key_defined = defined( 'VOXMANAGER_API_KEY' ) && VOXMANAGER_API_KEY;
 		$has_github_token = $this->settings->has_github_token();
 		$has_api_key = $this->settings->has_api_key();
+		$initial_notices = array();
 
 		if ( ! $has_api_key ) {
 			$generated_api_key = $this->generate_api_key();
@@ -77,7 +79,31 @@ final class Admin_Page {
 		$install_error_message = $install_error ? $this->installer->get_install_error_message() : '';
 		$generated_api_key = $this->get_generated_api_key_notice();
 		if ( $generated_api_key !== '' ) {
-			$notices[] = __( 'API key generated. Copy it now; it will only be shown once.', 'voxmanager' );
+			$initial_notices[] = __( 'API key generated. Copy it now; it will only be shown once.', 'voxmanager' );
+		}
+
+		$encryption_warning = $this->settings->get_encryption_warning();
+		if ( $encryption_warning !== '' ) {
+			$initial_notices[] = $encryption_warning;
+		}
+
+		foreach ( $suite_plugins as $plugin_file => $config ) {
+			if ( empty( $config['repo'] ) ) {
+				continue;
+			}
+
+			$error = $this->github->get_release_error( $config['repo'] );
+			if ( empty( $error['message'] ) ) {
+				continue;
+			}
+
+			$label = isset( $config['label'] ) && $config['label'] !== '' ? $config['label'] : $plugin_file;
+			$initial_notices[] = sprintf(
+				/* translators: 1: plugin label, 2: error message */
+				__( 'Update check failed for %1$s: %2$s', 'voxmanager' ),
+				$label,
+				$error['message']
+			);
 		}
 
 		$view = trailingslashit( dirname( __DIR__ ) ) . 'templates/admin-page.php';

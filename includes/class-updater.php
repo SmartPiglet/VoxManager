@@ -25,6 +25,8 @@ final class Updater {
 		}
 
 		$installed = get_plugins();
+		// Use real plugin file keys (case-insensitive match) for WordPress update APIs.
+		$installed_map = $this->settings->get_installed_plugin_map( $installed );
 		$suite_plugins = $this->settings->get_suite_plugins();
 		if ( ! isset( $transient->response ) || ! is_array( $transient->response ) ) {
 			$transient->response = array();
@@ -38,7 +40,8 @@ final class Updater {
 				continue;
 			}
 
-			$plugin_data = $installed[ $plugin_file ] ?? null;
+			$resolved_plugin_file = $this->settings->resolve_installed_plugin_file( $plugin_file, $installed_map );
+			$plugin_data = $installed[ $resolved_plugin_file ] ?? null;
 			if ( ! is_array( $plugin_data ) ) {
 				continue;
 			}
@@ -61,12 +64,12 @@ final class Updater {
 				}
 
 				if ( version_compare( $current_version, $remote_version, '>=' ) ) {
-					if ( isset( $transient->response[ $plugin_file ] ) ) {
-						unset( $transient->response[ $plugin_file ] );
+					if ( isset( $transient->response[ $resolved_plugin_file ] ) ) {
+						unset( $transient->response[ $resolved_plugin_file ] );
 					}
-					$transient->no_update[ $plugin_file ] = (object) array(
+					$transient->no_update[ $resolved_plugin_file ] = (object) array(
 						'slug'        => $config['slug'],
-						'plugin'      => $plugin_file,
+						'plugin'      => $resolved_plugin_file,
 						'new_version' => $remote_version,
 						'url'         => 'https://github.com/' . $this->settings->sanitize_repo( $config['repo'] ),
 						'package'     => '',
@@ -74,9 +77,9 @@ final class Updater {
 					continue;
 				}
 
-				$transient->response[ $plugin_file ] = (object) array(
+				$transient->response[ $resolved_plugin_file ] = (object) array(
 					'slug'        => $config['slug'],
-					'plugin'      => $plugin_file,
+					'plugin'      => $resolved_plugin_file,
 					'new_version' => $remote_version,
 					'url'         => 'https://github.com/' . $this->settings->sanitize_repo( $config['repo'] ),
 					'package'     => $package,
@@ -95,12 +98,12 @@ final class Updater {
 			}
 
 			if ( version_compare( $current_version, $remote_version, '>=' ) ) {
-				if ( isset( $transient->response[ $plugin_file ] ) ) {
-					unset( $transient->response[ $plugin_file ] );
+				if ( isset( $transient->response[ $resolved_plugin_file ] ) ) {
+					unset( $transient->response[ $resolved_plugin_file ] );
 				}
-				$transient->no_update[ $plugin_file ] = (object) array(
+				$transient->no_update[ $resolved_plugin_file ] = (object) array(
 					'slug'        => $config['slug'],
-					'plugin'      => $plugin_file,
+					'plugin'      => $resolved_plugin_file,
 					'new_version' => $remote_version,
 					'url'         => $release['html_url'] ?? '',
 					'package'     => '',
@@ -108,14 +111,14 @@ final class Updater {
 				continue;
 			}
 
-			$package = $this->github->resolve_release_package( $release, $plugin_file, $config );
+			$package = $this->github->resolve_release_package( $release, $resolved_plugin_file, $config );
 			if ( $package === '' ) {
 				continue;
 			}
 
-			$transient->response[ $plugin_file ] = (object) array(
+			$transient->response[ $resolved_plugin_file ] = (object) array(
 				'slug'        => $config['slug'],
-				'plugin'      => $plugin_file,
+				'plugin'      => $resolved_plugin_file,
 				'new_version' => $remote_version,
 				'url'         => $release['html_url'] ?? '',
 				'package'     => $package,
@@ -155,7 +158,9 @@ final class Updater {
 				}
 
 				$installed = get_plugins();
-				$plugin_data = $installed[ $match['plugin_file'] ] ?? array();
+				$installed_map = $this->settings->get_installed_plugin_map( $installed );
+				$resolved_plugin_file = $this->settings->resolve_installed_plugin_file( $match['plugin_file'], $installed_map );
+				$plugin_data = $installed[ $resolved_plugin_file ] ?? array();
 				$branch_note = sprintf( __( 'Updates from branch: %s', 'voxmanager' ), $branch );
 
 				$info = (object) array(
@@ -185,7 +190,9 @@ final class Updater {
 		}
 
 		$installed = get_plugins();
-		$plugin_data = $installed[ $match['plugin_file'] ] ?? array();
+		$installed_map = $this->settings->get_installed_plugin_map( $installed );
+		$resolved_plugin_file = $this->settings->resolve_installed_plugin_file( $match['plugin_file'], $installed_map );
+		$plugin_data = $installed[ $resolved_plugin_file ] ?? array();
 		$description = isset( $release['body'] ) ? (string) $release['body'] : '';
 
 		$info = (object) array(

@@ -193,11 +193,13 @@ final class Github_Client {
 		);
 
 		if ( is_wp_error( $response ) ) {
+			$this->record_api_error( $repo, $response->get_error_message(), array( 'context' => 'repo_info' ) );
 			return null;
 		}
 
 		$status_code = wp_remote_retrieve_response_code( $response );
 		if ( $status_code < 200 || $status_code >= 300 ) {
+			$this->record_api_error( $repo, $this->format_http_error_message( $status_code, $response ), array( 'context' => 'repo_info', 'status' => $status_code ) );
 			return null;
 		}
 
@@ -237,11 +239,13 @@ final class Github_Client {
 		);
 
 		if ( is_wp_error( $response ) ) {
+			$this->record_api_error( $repo, $response->get_error_message(), array( 'context' => 'repo_branches' ) );
 			return array();
 		}
 
 		$status_code = wp_remote_retrieve_response_code( $response );
 		if ( $status_code < 200 || $status_code >= 300 ) {
+			$this->record_api_error( $repo, $this->format_http_error_message( $status_code, $response ), array( 'context' => 'repo_branches', 'status' => $status_code ) );
 			return array();
 		}
 
@@ -299,13 +303,13 @@ final class Github_Client {
 		);
 
 		if ( is_wp_error( $response ) ) {
-			$this->set_release_error( $repo, $response->get_error_message() );
+			$this->record_api_error( $repo, $response->get_error_message(), array( 'context' => 'release' ) );
 			return null;
 		}
 
 		$status_code = wp_remote_retrieve_response_code( $response );
 		if ( $status_code < 200 || $status_code >= 300 ) {
-			$this->set_release_error( $repo, 'HTTP ' . $status_code );
+			$this->record_api_error( $repo, $this->format_http_error_message( $status_code, $response ), array( 'context' => 'release', 'status' => $status_code ) );
 			return null;
 		}
 
@@ -313,7 +317,7 @@ final class Github_Client {
 		if ( $source === 'tags' ) {
 			$tag = is_array( $data ) ? ( $data[0] ?? null ) : null;
 			if ( ! is_array( $tag ) ) {
-				$this->set_release_error( $repo, 'Missing tag data' );
+				$this->record_api_error( $repo, __( 'Missing tag data.', 'voxmanager' ), array( 'context' => 'release' ) );
 				return null;
 			}
 
@@ -329,7 +333,7 @@ final class Github_Client {
 		}
 
 		if ( ! is_array( $data ) || empty( $data['tag_name'] ) ) {
-			$this->set_release_error( $repo, 'Missing release data' );
+			$this->record_api_error( $repo, __( 'Missing release data.', 'voxmanager' ), array( 'context' => 'release' ) );
 			return null;
 		}
 
@@ -553,29 +557,36 @@ final class Github_Client {
 
 		if ( is_wp_error( $response ) ) {
 			$error = $response->get_error_message();
+			error_log( "[VoxManager Debug] Request failed for $api_url: $error" );
+			$this->record_api_error( $repo, $error, array( 'context' => 'repo_file', 'path' => $path ) );
 			return '';
 		}
 
 		$status_code = wp_remote_retrieve_response_code( $response );
 		if ( $status_code < 200 || $status_code >= 300 ) {
-			$error = 'HTTP ' . $status_code;
+			error_log( "[VoxManager Debug] Request failed for $api_url: HTTP $status_code" );
+			$error = $this->format_http_error_message( $status_code, $response );
+			$this->record_api_error( $repo, $error, array( 'context' => 'repo_file', 'status' => $status_code, 'path' => $path ) );
 			return '';
 		}
 
 		$data = json_decode( wp_remote_retrieve_body( $response ), true );
 		if ( ! is_array( $data ) || empty( $data['content'] ) || empty( $data['encoding'] ) ) {
 			$error = __( 'Missing file content.', 'voxmanager' );
+			$this->record_api_error( $repo, $error, array( 'context' => 'repo_file', 'path' => $path ) );
 			return '';
 		}
 
 		if ( $data['encoding'] !== 'base64' ) {
 			$error = __( 'Unsupported file encoding.', 'voxmanager' );
+			$this->record_api_error( $repo, $error, array( 'context' => 'repo_file', 'path' => $path ) );
 			return '';
 		}
 
 		$decoded = base64_decode( str_replace( "\n", '', (string) $data['content'] ) );
 		if ( ! is_string( $decoded ) || $decoded === '' ) {
 			$error = __( 'Unable to decode file contents.', 'voxmanager' );
+			$this->record_api_error( $repo, $error, array( 'context' => 'repo_file', 'path' => $path ) );
 			return '';
 		}
 
@@ -598,7 +609,11 @@ final class Github_Client {
 	}
 
 	public function parse_plugin_version( string $contents ): string {
-		if ( preg_match( '/^\s*Version:\s*(.+)$/mi', $contents, $matches ) ) {
+		if ( preg_match( '/^[ \t*]*Version:\s*(.+)$/mi', $contents, $matches ) ) {
+			return trim( $matches[1] );
+		}
+		// Try looser match
+		if ( preg_match( '/Version:\s*([0-9.]+)/i', $contents, $matches ) ) {
 			return trim( $matches[1] );
 		}
 
@@ -652,5 +667,42 @@ final class Github_Client {
 
 	private function get_release_error_key( string $repo ): string {
 		return 'voxmanager_release_error_' . md5( $repo );
+	}
+
+	private function record_api_error( string $repo, string $message, array $context = array() ): void {
+		$message = trim( $message );
+		if ( $message === '' ) {
+			return;
+		}
+
+		$this->set_release_error( $repo, $message );
+
+		/**
+		 * Fires when VoxManager encounters a GitHub API error.
+		 *
+		 * @param array $context Error context payload.
+		 */
+		do_action(
+			'voxmanager_github_error',
+			array_merge(
+				array(
+					'repo'    => $repo,
+					'message' => $message,
+				),
+				$context
+			)
+		);
+	}
+
+	private function format_http_error_message( int $status_code, $response ): string {
+		$message = 'HTTP ' . $status_code;
+		$body = wp_remote_retrieve_body( $response );
+		$data = json_decode( (string) $body, true );
+
+		if ( is_array( $data ) && ! empty( $data['message'] ) ) {
+			$message .= ' - ' . (string) $data['message'];
+		}
+
+		return $message;
 	}
 }

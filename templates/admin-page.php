@@ -11,7 +11,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-$notices = array();
+$notices = isset( $initial_notices ) && is_array( $initial_notices ) ? $initial_notices : array();
 
 if ( $checked_notice ) {
 	$notices[] = __( 'Update check completed.', 'voxmanager' );
@@ -139,10 +139,11 @@ if ( ! isset( $tabs[ $active_tab ] ) ) {
 				<div class="vx-panels">
 					<?php foreach ( $suite_plugins as $plugin_file => $config ) : ?>
 						<?php
-						$plugin_data = $installed[ $plugin_file ] ?? null;
+						$resolved_plugin_file = $this->settings->resolve_installed_plugin_file( $plugin_file, $installed_map );
+						$plugin_data = $installed[ $resolved_plugin_file ] ?? null;
 						$is_installed = is_array( $plugin_data );
-						$is_active = $is_installed && is_plugin_active( $plugin_file );
-						$is_network_active = $is_installed && function_exists( 'is_plugin_active_for_network' ) && is_plugin_active_for_network( $plugin_file );
+						$is_active = $is_installed && is_plugin_active( $resolved_plugin_file );
+						$is_network_active = $is_installed && function_exists( 'is_plugin_active_for_network' ) && is_plugin_active_for_network( $resolved_plugin_file );
 
 						$status = esc_html__( 'Missing', 'voxmanager' );
 						if ( $is_installed ) {
@@ -164,8 +165,10 @@ if ( ! isset( $tabs[ $active_tab ] ) ) {
 						}
 
 						$version = $is_installed ? (string) ( $plugin_data['Version'] ?? '' ) : '';
-						$update_data = $this->updater->get_update_data( $updates, $plugin_file );
+						$update_data = $this->updater->get_update_data( $updates, $resolved_plugin_file );
 						$error = $config['repo'] ? $this->github->get_release_error( $config['repo'] ) : array();
+						$error_message = isset( $error['message'] ) ? (string) $error['message'] : '';
+						$error_time = isset( $error['time'] ) ? (int) $error['time'] : 0;
 						$update_label = '';
 						$update_action = '';
 						$install_action = '';
@@ -179,13 +182,13 @@ if ( ! isset( $tabs[ $active_tab ] ) ) {
 								);
 								$install_action = '<a class="ts-button ts-outline" href="' . esc_url( $install_url ) . '">' . esc_html__( 'Install', 'voxmanager' ) . '</a>';
 							}
-						} elseif ( ! empty( $error['message'] ) ) {
-							$update_label = esc_html( sprintf( __( 'Update check failed: %s', 'voxmanager' ), $error['message'] ) );
+						} elseif ( $error_message !== '' ) {
+							$update_label = esc_html( sprintf( __( 'Update check failed: %s', 'voxmanager' ), $error_message ) );
 						} elseif ( $update_data['available'] ) {
 							$update_label = esc_html( sprintf( __( 'Update available: %s', 'voxmanager' ), $update_data['version'] ) );
 							$update_url = wp_nonce_url(
-								self_admin_url( 'update.php?action=upgrade-plugin&plugin=' . $plugin_file ),
-								'upgrade-plugin_' . $plugin_file
+								self_admin_url( 'update.php?action=upgrade-plugin&plugin=' . $resolved_plugin_file ),
+								'upgrade-plugin_' . $resolved_plugin_file
 							);
 							$update_action = '<a class="ts-button ts-save-settings btn-shadow" href="' . esc_url( $update_url ) . '">' . esc_html__( 'Update now', 'voxmanager' ) . '</a>';
 						} elseif ( $last_checked ) {
@@ -208,6 +211,21 @@ if ( ! isset( $tabs[ $active_tab ] ) ) {
 									<li><?php echo esc_html( sprintf( __( 'Version: %s', 'voxmanager' ), $version !== '' ? $version : '-' ) ); ?></li>
 									<li><?php echo esc_html( sprintf( __( 'Status: %s', 'voxmanager' ), $status ) ); ?></li>
 									<li><?php echo esc_html( sprintf( __( 'Update: %s', 'voxmanager' ), $update_label ) ); ?></li>
+									<?php if ( $error_message !== '' ) : ?>
+										<li>
+											<?php
+											$error_timestamp = $error_time > 0 ? date_i18n( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), $error_time ) : '';
+											echo esc_html(
+												sprintf(
+													/* translators: 1: error message, 2: timestamp */
+													__( 'Last error: %1$s %2$s', 'voxmanager' ),
+													$error_message,
+													$error_timestamp !== '' ? '(' . $error_timestamp . ')' : ''
+												)
+											);
+											?>
+										</li>
+									<?php endif; ?>
 									<li><?php echo wp_kses_post( sprintf( __( 'Repo: %s', 'voxmanager' ), $repo_link ) ); ?></li>
 								</ul>
 							</div>

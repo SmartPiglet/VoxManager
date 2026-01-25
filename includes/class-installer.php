@@ -66,6 +66,13 @@ final class Installer {
 		}
 
 		$suite_plugins = $this->settings->get_suite_plugins();
+		// Resolve suite keys case-insensitively to avoid mismatches on Linux hosts.
+		$resolved_key = $this->settings->resolve_suite_plugin_key( $plugin_file, $suite_plugins );
+		if ( $resolved_key === '' ) {
+			return new \WP_Error( 'voxmanager_invalid_plugin', __( 'Plugin configuration not found.', 'voxmanager' ), array( 'status' => 404 ) );
+		}
+
+		$plugin_file = $resolved_key;
 		$config = $suite_plugins[ $plugin_file ] ?? null;
 		if ( ! is_array( $config ) || empty( $config['repo'] ) ) {
 			return new \WP_Error( 'voxmanager_invalid_plugin', __( 'Plugin configuration not found.', 'voxmanager' ), array( 'status' => 404 ) );
@@ -77,14 +84,17 @@ final class Installer {
 
 		WP_Filesystem();
 
-		$package_url = $this->get_install_package_url( $config, $plugin_file );
+		$installed_map = $this->settings->get_installed_plugin_map( get_plugins() );
+		$resolved_plugin_file = $this->settings->resolve_installed_plugin_file( $plugin_file, $installed_map );
+
+		$package_url = $this->get_install_package_url( $config, $resolved_plugin_file );
 		if ( $package_url === '' ) {
 			return new \WP_Error( 'voxmanager_package_missing', __( 'Unable to resolve a download package.', 'voxmanager' ), array( 'status' => 500 ) );
 		}
 
 		$this->install_context = array(
-			'plugin_file' => $plugin_file,
-			'plugin_dir'  => dirname( $plugin_file ),
+			'plugin_file' => $resolved_plugin_file,
+			'plugin_dir'  => dirname( $resolved_plugin_file ),
 		);
 
 		$skin = new \Automatic_Upgrader_Skin();
@@ -117,9 +127,12 @@ final class Installer {
 		}
 
 		$suite_plugins = $this->settings->get_suite_plugins();
-		if ( ! isset( $suite_plugins[ $plugin_file ] ) ) {
+		$resolved_key = $this->settings->resolve_suite_plugin_key( $plugin_file, $suite_plugins );
+		if ( $resolved_key === '' ) {
 			return new \WP_Error( 'voxmanager_invalid_plugin', __( 'Plugin configuration not found.', 'voxmanager' ), array( 'status' => 404 ) );
 		}
+
+		$plugin_file = $resolved_key;
 
 		require_once ABSPATH . 'wp-admin/includes/file.php';
 		require_once ABSPATH . 'wp-admin/includes/plugin.php';
@@ -127,14 +140,17 @@ final class Installer {
 
 		WP_Filesystem();
 
+		$installed_map = $this->settings->get_installed_plugin_map( get_plugins() );
+		$resolved_plugin_file = $this->settings->resolve_installed_plugin_file( $plugin_file, $installed_map );
+
 		$this->install_context = array(
-			'plugin_file' => $plugin_file,
-			'plugin_dir'  => dirname( $plugin_file ),
+			'plugin_file' => $resolved_plugin_file,
+			'plugin_dir'  => dirname( $resolved_plugin_file ),
 		);
 
 		$skin = new \Automatic_Upgrader_Skin();
 		$upgrader = new \Plugin_Upgrader( $skin );
-		$result = $upgrader->upgrade( $plugin_file );
+		$result = $upgrader->upgrade( $resolved_plugin_file );
 
 		$this->install_context = null;
 
@@ -167,6 +183,12 @@ final class Installer {
 		check_admin_referer( 'voxmanager_install_plugin_' . $plugin_file );
 
 		$suite_plugins = $this->settings->get_suite_plugins();
+		$resolved_key = $this->settings->resolve_suite_plugin_key( $plugin_file, $suite_plugins );
+		if ( $resolved_key === '' ) {
+			wp_die( esc_html__( 'Plugin configuration not found.', 'voxmanager' ) );
+		}
+
+		$plugin_file = $resolved_key;
 		$config = $suite_plugins[ $plugin_file ] ?? null;
 		if ( ! is_array( $config ) || empty( $config['repo'] ) ) {
 			wp_die( esc_html__( 'Plugin configuration not found.', 'voxmanager' ) );
@@ -178,7 +200,10 @@ final class Installer {
 
 		WP_Filesystem();
 
-		$package_url = $this->get_install_package_url( $config, $plugin_file );
+		$installed_map = $this->settings->get_installed_plugin_map( get_plugins() );
+		$resolved_plugin_file = $this->settings->resolve_installed_plugin_file( $plugin_file, $installed_map );
+
+		$package_url = $this->get_install_package_url( $config, $resolved_plugin_file );
 		if ( $package_url === '' ) {
 			$this->set_install_error_message( __( 'Unable to resolve a download package.', 'voxmanager' ) );
 			$redirect = add_query_arg( 'voxmanager_install_error', '1', self_admin_url( 'admin.php?page=voxmanager' ) );
@@ -187,8 +212,8 @@ final class Installer {
 		}
 
 		$this->install_context = array(
-			'plugin_file' => $plugin_file,
-			'plugin_dir'  => dirname( $plugin_file ),
+			'plugin_file' => $resolved_plugin_file,
+			'plugin_dir'  => dirname( $resolved_plugin_file ),
 		);
 
 		$skin = new \Automatic_Upgrader_Skin();
@@ -221,8 +246,14 @@ final class Installer {
 		if ( $plugin_dir === '' && isset( $hook_extra['plugin'] ) && is_string( $hook_extra['plugin'] ) ) {
 			$suite_plugins = $this->settings->get_suite_plugins();
 			$plugin_file = $hook_extra['plugin'];
-			if ( isset( $suite_plugins[ $plugin_file ] ) ) {
-				$plugin_dir = dirname( $plugin_file );
+			$resolved_key = $this->settings->resolve_suite_plugin_key( $plugin_file, $suite_plugins );
+			if ( $resolved_key !== '' ) {
+				$installed_map = array();
+				if ( function_exists( 'get_plugins' ) ) {
+					$installed_map = $this->settings->get_installed_plugin_map( get_plugins() );
+				}
+				$resolved_plugin_file = $this->settings->resolve_installed_plugin_file( $resolved_key, $installed_map );
+				$plugin_dir = dirname( $resolved_plugin_file );
 			}
 		}
 

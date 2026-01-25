@@ -10,6 +10,7 @@ final class Settings {
 	private const OPTION_NAME = 'voxmanager_settings';
 	private const OPTION_SECRETS = 'voxmanager_secrets';
 	private const SETTINGS_GROUP = 'voxmanager';
+	private const ENCRYPTION_WARNING_KEY = 'voxmanager_encryption_warning_';
 
 	public function register_settings(): void {
 		register_setting(
@@ -61,7 +62,14 @@ final class Settings {
 		$saved    = array();
 
 		if ( isset( $settings['plugins'] ) && is_array( $settings['plugins'] ) ) {
-			$saved = $settings['plugins'];
+			foreach ( $settings['plugins'] as $plugin_file => $config ) {
+				$resolved_key = $this->resolve_suite_plugin_key( (string) $plugin_file, $defaults );
+				if ( '' === $resolved_key ) {
+					continue;
+				}
+
+				$saved[ $resolved_key ] = $config;
+			}
 		}
 
 		$plugins = array_merge( $defaults, $saved );
@@ -99,16 +107,17 @@ final class Settings {
 
 		foreach ( $raw_plugins as $plugin_file => $data ) {
 			$plugin_file = is_string( $plugin_file ) ? $plugin_file : '';
-			if ( $plugin_file === '' || ! isset( $defaults[ $plugin_file ] ) ) {
+			$resolved_key = $this->resolve_suite_plugin_key( $plugin_file, $defaults );
+			if ( $resolved_key === '' || ! isset( $defaults[ $resolved_key ] ) ) {
 				continue;
 			}
 
 			$data = is_array( $data ) ? $data : array();
-			$sanitized[ $plugin_file ] = array(
-				'label' => $defaults[ $plugin_file ]['label'],
-				'slug'  => isset( $data['slug'] ) ? sanitize_key( (string) $data['slug'] ) : $defaults[ $plugin_file ]['slug'],
-				'repo'  => isset( $data['repo'] ) ? $this->sanitize_repo( (string) $data['repo'] ) : $defaults[ $plugin_file ]['repo'],
-				'branch' => isset( $data['branch'] ) ? $this->sanitize_branch( (string) $data['branch'] ) : $defaults[ $plugin_file ]['branch'],
+			$sanitized[ $resolved_key ] = array(
+				'label' => $defaults[ $resolved_key ]['label'],
+				'slug'  => isset( $data['slug'] ) ? sanitize_key( (string) $data['slug'] ) : $defaults[ $resolved_key ]['slug'],
+				'repo'  => isset( $data['repo'] ) ? $this->sanitize_repo( (string) $data['repo'] ) : $defaults[ $resolved_key ]['repo'],
+				'branch' => isset( $data['branch'] ) ? $this->sanitize_branch( (string) $data['branch'] ) : $defaults[ $resolved_key ]['branch'],
 			);
 		}
 
@@ -295,7 +304,75 @@ final class Settings {
 		}
 
 		$encrypted = Encryptor::encrypt( $value );
-		return false === $encrypted ? '' : $encrypted;
+		if ( false === $encrypted ) {
+			// Fall back to storing the raw value so secrets do not vanish on hosts without OpenSSL ciphers.
+			$this->set_encryption_warning( Encryptor::get_last_error() );
+			return $value;
+		}
+
+		return $encrypted;
+	}
+
+	public function get_encryption_warning(): string {
+		$key = self::ENCRYPTION_WARNING_KEY . get_current_user_id();
+		$message = get_site_transient( $key );
+		delete_site_transient( $key );
+
+		return is_string( $message ) ? $message : '';
+	}
+
+	public function get_installed_plugin_map( array $installed ): array {
+		$map = array();
+
+		foreach ( $installed as $plugin_file => $_data ) {
+			if ( is_string( $plugin_file ) && $plugin_file !== '' ) {
+				// Normalize keys for case-insensitive lookup on Linux hosts.
+				$map[ strtolower( $plugin_file ) ] = $plugin_file;
+			}
+		}
+
+		return $map;
+	}
+
+	public function resolve_installed_plugin_file( string $plugin_file, array $installed_map = array() ): string {
+		$plugin_file = trim( $plugin_file );
+		if ( $plugin_file === '' ) {
+			return '';
+		}
+
+		if ( empty( $installed_map ) ) {
+			if ( ! function_exists( 'get_plugins' ) ) {
+				require_once ABSPATH . 'wp-admin/includes/plugin.php';
+			}
+			$installed_map = $this->get_installed_plugin_map( get_plugins() );
+		}
+
+		$lower = strtolower( $plugin_file );
+		return $installed_map[ $lower ] ?? $plugin_file;
+	}
+
+	public function resolve_suite_plugin_key( string $plugin_file, array $suite_plugins = array() ): string {
+		$plugin_file = trim( $plugin_file );
+		if ( $plugin_file === '' ) {
+			return '';
+		}
+
+		if ( empty( $suite_plugins ) ) {
+			$suite_plugins = $this->get_suite_plugins();
+		}
+
+		if ( isset( $suite_plugins[ $plugin_file ] ) ) {
+			return $plugin_file;
+		}
+
+		$lower = strtolower( $plugin_file );
+		foreach ( $suite_plugins as $key => $_config ) {
+			if ( strtolower( (string) $key ) === $lower ) {
+				return (string) $key;
+			}
+		}
+
+		return '';
 	}
 
 	private function maybe_migrate_legacy_secrets(): void {
@@ -356,6 +433,19 @@ final class Settings {
 					'type' => 'object',
 				),
 			),
+		);
+	}
+
+	private function set_encryption_warning( string $reason ): void {
+		$reason = trim( $reason );
+		if ( $reason === '' ) {
+			$reason = __( 'Encryption unavailable; token stored without encryption.', 'voxmanager' );
+		}
+
+		set_site_transient(
+			self::ENCRYPTION_WARNING_KEY . get_current_user_id(),
+			$reason,
+			10 * MINUTE_IN_SECONDS
 		);
 	}
 }
