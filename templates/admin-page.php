@@ -308,6 +308,14 @@ if ( ! isset( $tabs[ $active_tab ] ) ) {
 							</select>
 							<p><?php echo esc_html__( 'Repo zipball pulls directly from the repository. Release assets use uploaded zip files.', 'voxmanager' ); ?></p>
 						</div>
+						<div class="ts-form-group x-col-12">
+							<?php $dev_mode = ! empty( $settings['dev_mode'] ); ?>
+							<label for="voxmanager_dev_mode"><?php echo esc_html__( 'Development bypass', 'voxmanager' ); ?></label>
+							<div class="basic-checkbox">
+								<input type="checkbox" id="voxmanager_dev_mode" name="voxmanager_dev_mode" value="1" <?php checked( $dev_mode ); ?> />
+								<span><?php echo esc_html__( 'Allow VoxPro dashboards to render satellite cards without an active license.', 'voxmanager' ); ?></span>
+							</div>
+						</div>
 					</div>
 
 					<div class="ts-spacer"></div>

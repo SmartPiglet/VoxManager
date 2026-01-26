@@ -58,5 +58,14 @@ final class Plugin {
 		add_filter( 'http_request_args', array( $this->github, 'filter_http_request_args' ), 10, 2 );
 		add_filter( 'upgrader_source_selection', array( $this->installer, 'filter_upgrader_source_selection' ), 10, 4 );
 		add_action( 'rest_api_init', array( $this->rest, 'register_routes' ) );
+		add_filter( 'voxpro_commons_config', array( $this, 'filter_voxpro_commons_config' ) );
+	}
+
+	public function filter_voxpro_commons_config( array $config ): array {
+		$config['voxmanager'] = array(
+			'devMode' => $this->settings->is_dev_mode_enabled(),
+		);
+
+		return $config;
 	}
 }

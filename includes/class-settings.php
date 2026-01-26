@@ -53,6 +53,7 @@ final class Settings {
 			'release_source' => (string) $merged['release_source'],
 			'package_source' => (string) $merged['package_source'],
 			'plugins'        => $merged['plugins'],
+			'dev_mode'       => ! empty( $merged['dev_mode'] ),
 		);
 	}
 
@@ -134,11 +135,13 @@ final class Settings {
 		$package_source = in_array( $package_source, array( 'zipball', 'asset' ), true ) ? $package_source : 'asset';
 
 		$raw_plugins = isset( $raw_settings['plugins'] ) && is_array( $raw_settings['plugins'] ) ? $raw_settings['plugins'] : array();
+		$dev_mode = ! empty( $raw_settings['dev_mode'] );
 
 		return array(
 			'release_source' => $release_source,
 			'package_source' => $package_source,
 			'plugins'        => $this->sanitize_plugin_settings( $raw_plugins ),
+			'dev_mode'       => $dev_mode,
 		);
 	}
 
@@ -406,6 +409,7 @@ final class Settings {
 			'release_source' => 'releases',
 			'package_source' => 'asset',
 			'plugins'        => array(),
+			'dev_mode'       => false,
 		);
 	}
 
@@ -432,8 +436,20 @@ final class Settings {
 				'plugins'        => array(
 					'type' => 'object',
 				),
+				'dev_mode'       => array(
+					'type' => 'boolean',
+				),
 			),
 		);
+	}
+
+	public function is_dev_mode_enabled(): bool {
+		if ( defined( 'VOXMANAGER_DEV_MODE' ) ) {
+			return (bool) VOXMANAGER_DEV_MODE;
+		}
+
+		$settings = $this->get_settings();
+		return ! empty( $settings['dev_mode'] );
 	}
 
 	private function set_encryption_warning( string $reason ): void {

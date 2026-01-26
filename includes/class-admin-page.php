@@ -174,6 +174,7 @@ final class Admin_Page {
 
 		$raw_plugins = isset( $_POST['voxmanager_plugins'] ) && is_array( $_POST['voxmanager_plugins'] ) ? $_POST['voxmanager_plugins'] : array();
 		$settings['plugins'] = $this->settings->sanitize_plugin_settings( $raw_plugins );
+		$settings['dev_mode'] = isset( $_POST['voxmanager_dev_mode'] ) && '1' === (string) wp_unslash( $_POST['voxmanager_dev_mode'] );
 
 		update_option( 'voxmanager_settings', $settings, false );
 		$this->github->clear_release_cache();
