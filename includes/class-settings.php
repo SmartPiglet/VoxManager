@@ -452,6 +452,55 @@ final class Settings {
 		return ! empty( $settings['dev_mode'] );
 	}
 
+	public function seed_licenses(): void {
+		$user_id = get_current_user_id();
+		if ( ! $user_id ) {
+			return;
+		}
+
+		$products = array(
+			900 => 'VoxPro',
+			901 => 'VoxPulse',
+			902 => 'VoxPoints',
+			903 => 'VoxLab',
+			904 => 'VoxPay',
+		);
+
+		$existing = get_option( 'voxpro_shared_licenses', array() );
+		if ( ! is_array( $existing ) ) {
+			$existing = array();
+		}
+
+		$updated = false;
+		foreach ( $products as $id => $name ) {
+			$found = false;
+			foreach ( $existing as $license ) {
+				if ( isset( $license['product_id'] ) && (int) $license['product_id'] === $id ) {
+					$found = true;
+					break;
+				}
+			}
+
+			if ( ! $found ) {
+				$key = sprintf( 'VX-%d-%d-%s', $user_id, $id, strtoupper( wp_generate_password( 8, false ) ) );
+				$existing[ $key ] = array(
+					'key'              => $key,
+					'user_id'          => $user_id,
+					'product_id'       => $id,
+					'status'           => 'active',
+					'activation_limit' => 999,
+					'expires_at'       => null,
+					'activations'      => array( home_url() ),
+				);
+				$updated = true;
+			}
+		}
+
+		if ( $updated ) {
+			update_option( 'voxpro_shared_licenses', $existing );
+		}
+	}
+
 	private function set_encryption_warning( string $reason ): void {
 		$reason = trim( $reason );
 		if ( $reason === '' ) {

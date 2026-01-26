@@ -203,6 +203,20 @@ final class Admin_Page {
 		exit;
 	}
 
+	public function handle_self_license(): void {
+		if ( ! current_user_can( $this->settings->get_required_capability() ) ) {
+			wp_die( esc_html__( 'You do not have permission to perform this action.', 'voxmanager' ) );
+		}
+
+		check_admin_referer( 'voxmanager_self_license' );
+
+		$this->settings->seed_licenses();
+
+		$redirect = add_query_arg( 'voxmanager_licensed', '1', self_admin_url( 'admin.php?page=voxmanager' ) );
+		wp_safe_redirect( $redirect );
+		exit;
+	}
+
 	private function enqueue_voxel_backend_styles(): void {
 		$theme = wp_get_theme();
 		$stylesheet = $theme->get_stylesheet();

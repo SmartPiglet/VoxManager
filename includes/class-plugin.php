@@ -51,6 +51,7 @@ final class Plugin {
 		add_action( 'admin_post_voxmanager_check_updates', array( $this->admin, 'handle_check_updates' ) );
 		add_action( 'admin_post_voxmanager_save_settings', array( $this->admin, 'handle_save_settings' ) );
 		add_action( 'admin_post_voxmanager_sync_github', array( $this->admin, 'handle_sync_github' ) );
+		add_action( 'admin_post_voxmanager_self_license', array( $this->admin, 'handle_self_license' ) );
 		add_action( 'admin_post_voxmanager_install_plugin', array( $this->installer, 'handle_install_plugin' ) );
 
 		add_filter( 'pre_set_site_transient_update_plugins', array( $this->updater, 'filter_update_transient' ), 100 );
